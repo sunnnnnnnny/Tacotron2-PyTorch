@@ -1,4 +1,5 @@
 import os
+import re
 import torch
 import pickle
 import numpy as np
@@ -24,37 +25,64 @@ def files_to_list(fdir):
     return f_list
 
 
-class ljdataset(Dataset):
-    def __init__(self, fdir):
+class csmscdataset(Dataset):
+    def __init__(self):
         if hps.prep and hps.pth is not None and os.path.isfile(hps.pth):
-            with open(hps.pth, 'rb') as r:
-                self.f_list = pickle.load(r)
-        else:
-            self.f_list = files_to_list(fdir)
+            self.f_list = []
+            with open(hps.pth,"r") as log:
+                lines = log.readlines()
+                for line in lines:
+                    wav_path, sent = line.strip().split("|")
+                    self.f_list.append((wav_path,sent))
+            print(len(self.f_list))
+
+        self.lexicon = self.get_lexicon(hps.lexicon_path)
+    def get_lexicon(self, lexicon_path):
+        lexicon = {}
+        with open(lexicon_path) as f:
+            for line in f:
+                temp = re.split(r"\s+", line.strip("\n"))
+                word = temp[0]
+                phones = temp[1:]
+                if word.lower() not in lexicon:
+                    lexicon[word.lower()] = phones
+        return lexicon
 
     def __getitem__(self, index):
         text, mel = self.f_list[index] if hps.prep \
-                    else get_mel_text_pair(*self.f_list[index])
-        return text, mel
+                    else self.get_mel_text_pair(self.f_list[index])
+
 
     def __len__(self):
         return len(self.f_list)
 
+    def get_mel_text_pair(self,params):
+        wav_path, text = params
+        text = text.strip()
+        text = self.get_text(text)
+        mel = self.get_mel(wav_path)
+        return (text, mel)
 
-def get_mel_text_pair(text, wav_path):
-    text = get_text(text)
-    mel = get_mel(wav_path)
-    return (text, mel)
+    def get_text(self, text):
+        text_map = []
+        for piny in text.split():
+            if piny in self.lexicon:
+                phones = self.lexicon[piny]
+                text_map = text_map + phones
+            if piny[0] == "#":
+                text_map = text_map + [piny]
+        text = " ".join(text_map)
+        text = "{" + text + "}"
+        print(text)
+        print(len(text.split()))
+        return torch.IntTensor(text_to_sequence(text, []))
 
-def get_text(text):
-    return torch.IntTensor(text_to_sequence(text, hps.text_cleaners))
-
-def get_mel(wav_path):
-    wav = load_wav(wav_path)
-    return torch.Tensor(melspectrogram(wav).astype(np.float32))
+    def get_mel(self, wav_path):
+        wav = load_wav(wav_path)
+        return torch.Tensor(melspectrogram(wav).astype(np.float32))
 
 
-class ljcollate():
+class csmsccollate():
     def __init__(self, n_frames_per_step):
         self.n_frames_per_step = n_frames_per_step
 
@@ -91,3 +119,10 @@ class ljcollate():
             output_lengths[i] = mel.size(1)
 
         return text_padded, input_lengths, mel_padded, gate_padded, output_lengths
+
+
+if __name__ == "__main__":
+    csmsc_obj = csmscdataset()
+    out = csmsc_obj.get_text("wo3 neng2 #1 hen3 xin1 #1 da3 duan4 #1 ni3 bu5 #4")
+    print(out)
+    print(out.shape)

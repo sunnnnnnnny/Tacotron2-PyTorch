@@ -7,8 +7,9 @@ class hparams:
     ################################
     # Data Parameters              #
     ################################
-    text_cleaners=['english_cleaners']
-
+    # text_cleaners=['english_cleaners']
+    text_cleaners = ['mandarin_cleaners']
+    lexicon_path = "../lexicon/pinyin-lexicon-r.txt"
     ################################
     # Audio                        #
     ################################
@@ -29,7 +30,8 @@ class hparams:
     pin_mem = True
     n_workers = 4
     prep = True
-    pth = 'lj-22k.pkl'
+    # pth = 'lj-22k.pkl'
+    pth = "filelists/csmsc_path_sent.txt"
     lr = 2e-3
     betas = (0.9, 0.999)
     eps = 1e-6
